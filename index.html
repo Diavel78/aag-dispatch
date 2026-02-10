@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBi4fmwz_eVwX2Ts24R2jmjqkSXtuHZZ6U&libraries=places"></script>
 <style>
 :root{--bg-primary:#0c0e14;--bg-secondary:#12151e;--bg-card:#1a1e2b;--bg-input:#222738;--bg-hover:#252a3d;--border:#2a2f42;--border-focus:#4a7cff;--text-primary:#e4e7f0;--text-secondary:#8890a8;--text-muted:#555d78;--accent:#4a7cff;--accent-hover:#5e8dff;--accent-dim:rgba(74,124,255,0.1);--s-pend:#f59e0b;--s-pend-bg:rgba(245,158,11,0.1);--s-disp:#6366f1;--s-disp-bg:rgba(99,102,241,0.1);--s-tran:#3b82f6;--s-tran-bg:rgba(59,130,246,0.1);--s-done:#22c55e;--s-done-bg:rgba(34,197,94,0.1);--danger:#ef4444;--danger-hover:#dc2626;--warning:#f59e0b;--r:8px;--rl:12px}
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;overflow-x:hidden}a{color:var(--accent);text-decoration:none}
@@ -197,7 +198,9 @@ tbody tr{transition:background .1s;cursor:pointer}tbody tr:hover{background:var(
 const FC={apiKey:"AIzaSyAZeoB413bEcrJ-KNIDGXo694RyT4McUK8",authDomain:"aag-dispatch.firebaseapp.com",projectId:"aag-dispatch",storageBucket:"aag-dispatch.firebasestorage.app",messagingSenderId:"975432478502",appId:"1:975432478502:web:104bee8ea400099712dbe7"};
 firebase.initializeApp(FC);const auth=firebase.auth(),db=firebase.firestore();
 let CU=null,CUD=null,CP='',unsubs=[];
-const DL=['Toyota - LHC','Nissan - LHC','Honda - LHC','Chevrolet - LHC','CDJR - LHC','Ford - Kingman','Ford - BHC'];
+const DL=['Toyota - LHC','Nissan - LHC','CDJR - LHC','Honda - Kingman','Chevrolet - Kingman','Ford - Kingman','Ford - BHC'];
+const DL_ADDR={'Toyota - LHC':'6510 Showplace Ave, Lake Havasu City, AZ','Nissan - LHC':'3482 AZ-95, Lake Havasu City, AZ','CDJR - LHC':'3920 AZ-95, Lake Havasu City, AZ','Honda - Kingman':'3800 Stockton Hill Rd, Kingman, AZ','Chevrolet - Kingman':'3730 Stockton Hill Rd, Kingman, AZ','Ford - Kingman':'3601 Stockton Hill Rd, Kingman, AZ','Ford - BHC':'2585 S Hwy 95, Bullhead City, AZ'};
+const GMAP_KEY='AIzaSyBi4fmwz_eVwX2Ts24R2jmjqkSXtuHZZ6U';
 const ST=['Pending','Dispatched','In Transit','Delivered'];
 
 function E(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
@@ -269,11 +272,12 @@ openM(eid?'Edit Dispatch':'New Dispatch',`<form id="dForm" onsubmit="saveD(event
 <div class="form-group full"><label>Address</label><input type="text" id="f_ca" value="${E(ed?.customerAddress||'')}"></div>
 <div class="form-section">Dispatch</div>
 <div class="form-group"><label>Driver</label><select id="f_drv" onchange="calcC()"><option value="">Select...</option>${dOpts}</select></div>
-<div class="form-group"><label>Origin</label><select id="f_org"><option value="">Select...</option>${dlOpts}<option value="Other" ${ed&&ed.origin==='Other'?'selected':''}>Other</option></select></div>
-<div class="form-group full"><label>Destination</label><input type="text" id="f_dst" value="${E(ed?.destination||'')}"></div>
+<div class="form-group"><label>Origin</label><select id="f_org" onchange="onOriginChange()"><option value="">Select...</option>${dlOpts}<option value="Other" ${ed&&ed.origin==='Other'?'selected':''}>Other</option></select><div id="f_orgAddr" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div></div>
+<div class="form-group full"><label>Destination Address</label><input type="text" id="f_dst" value="${E(ed?.destination||'')}" placeholder="Enter delivery address..." onblur="autoCalcMiles()"></div>
+<div class="form-group"><label>ETA</label><input type="text" id="f_eta" readonly value="${E(ed?.eta||'')}" placeholder="Auto-calculated" style="color:var(--text-secondary)"></div>
 <div class="form-group"><label>Date</label><input type="date" id="f_dt" value="${ed?.date||new Date().toISOString().split('T')[0]}"></div>
 <div class="form-group"><label>Time (optional)</label><input type="time" id="f_tm" value="${ed?.time||''}"></div>
-<div class="form-group"><label>Miles (one-way)</label><input type="number" id="f_mi" min="0" step="1" value="${ed?.miles||''}" oninput="calcC()"></div>
+<div class="form-group"><label>Miles (one-way) <span id="f_miStatus" style="font-weight:400;text-transform:none;letter-spacing:0"></span></label><input type="number" id="f_mi" min="0" step="1" value="${ed?.miles||''}" oninput="calcC()"></div>
 <div class="form-group"><label class="form-check" style="text-transform:none"><input type="checkbox" id="f_rt" ${ed?.roundTrip?'checked':''} onchange="calcC()"> Round Trip</label></div>
 <div class="form-group"><label>Calculated Cost</label><div class="cost-box" id="f_cc">$0.00</div></div>
 <div class="form-group"><label>Override Cost</label><input type="number" id="f_ov" min="0" step="0.01" value="${ed?.overrideCost||''}" placeholder="Leave blank for calculated" oninput="calcC()"></div>
@@ -281,12 +285,23 @@ openM(eid?'Edit Dispatch':'New Dispatch',`<form id="dForm" onsubmit="saveD(event
 <div class="form-group full"><label>Notes</label><textarea id="f_nt" rows="2" style="resize:vertical">${E(ed?.notes||'')}</textarea></div>
 </div></form>`,
 `<button class="btn btn-s" onclick="closeM()">Cancel</button>${eid?`<button class="btn btn-d btn-sm" onclick="delD('${eid}')">Delete</button>`:''}<button class="btn btn-p" onclick="document.getElementById('dForm').requestSubmit()">${eid?'Update':'Save'}</button>`);
-setTimeout(calcC,50)}
+setTimeout(()=>{calcC();onOriginChange()},50)}
+
+function onOriginChange(){const sel=document.getElementById('f_org');const addr=DL_ADDR[sel?.value]||'';document.getElementById('f_orgAddr').textContent=addr?'📍 '+addr:''}
+
+async function autoCalcMiles(){const org=document.getElementById('f_org')?.value;const dst=document.getElementById('f_dst')?.value?.trim();if(!org||!dst||!DL_ADDR[org])return;
+const originAddr=DL_ADDR[org];const status=document.getElementById('f_miStatus');
+status.innerHTML='<span style="color:var(--accent)">⏳ calculating...</span>';
+const svc=new google.maps.DistanceMatrixService();
+svc.getDistanceMatrix({origins:[originAddr],destinations:[dst],travelMode:'DRIVING',unitSystem:google.maps.UnitSystem.IMPERIAL},function(resp,stat){
+if(stat==='OK'&&resp.rows[0].elements[0].status==='OK'){const el=resp.rows[0].elements[0];const meters=el.distance.value;const miles=Math.round(meters*0.000621371);const duration=el.duration.text;
+document.getElementById('f_mi').value=miles;document.getElementById('f_eta').value=duration;
+status.innerHTML='<span style="color:var(--s-done)">✓ via Google Maps</span>';calcC()}else{status.innerHTML='<span style="color:var(--danger)">— address not found</span>'}})}
 
 function calcC(){const sel=document.getElementById('f_drv'),opt=sel?.selectedOptions[0],rate=parseFloat(opt?.dataset.rate||0),mi=parseFloat(document.getElementById('f_mi')?.value||0),rt=document.getElementById('f_rt')?.checked,ov=document.getElementById('f_ov')?.value,tm=rt?mi*2:mi,cc=rate*tm,fc=ov?parseFloat(ov):cc,el=document.getElementById('f_cc');if(el){if(ov)el.innerHTML=`<span style="text-decoration:line-through;color:var(--text-muted);font-size:14px">$${cc.toFixed(2)}</span> → $${fc.toFixed(2)}`;else{el.textContent='$'+cc.toFixed(2);if(rt&&mi)el.textContent+=` (${tm} mi)`}}}
 
 async function saveD(e,eid){e.preventDefault();const sel=document.getElementById('f_drv'),opt=sel?.selectedOptions[0],rate=parseFloat(opt?.dataset.rate||0),mi=parseFloat(document.getElementById('f_mi')?.value||0),rt=document.getElementById('f_rt')?.checked,ov=document.getElementById('f_ov')?.value,tm=rt?mi*2:mi,cc=rate*tm,fc=ov?parseFloat(ov):cc;
-const d={stockNumber:document.getElementById('f_stk').value.trim(),vin:document.getElementById('f_vin').value.trim(),vehicle:document.getElementById('f_veh').value.trim(),customerName:document.getElementById('f_cn').value.trim(),customerPhone:document.getElementById('f_cp').value.trim(),customerAddress:document.getElementById('f_ca').value.trim(),driverId:sel.value,driverName:opt?.text?.split(' ($')[0]||'',origin:document.getElementById('f_org').value,destination:document.getElementById('f_dst').value.trim(),date:document.getElementById('f_dt').value,time:document.getElementById('f_tm').value,miles:mi,roundTrip:rt,costPerMile:rate,calculatedCost:cc,overrideCost:ov?parseFloat(ov):null,finalCost:fc,status:document.getElementById('f_st').value,notes:document.getElementById('f_nt').value.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+const d={stockNumber:document.getElementById('f_stk').value.trim(),vin:document.getElementById('f_vin').value.trim(),vehicle:document.getElementById('f_veh').value.trim(),customerName:document.getElementById('f_cn').value.trim(),customerPhone:document.getElementById('f_cp').value.trim(),customerAddress:document.getElementById('f_ca').value.trim(),driverId:sel.value,driverName:opt?.text?.split(' ($')[0]||'',origin:document.getElementById('f_org').value,destination:document.getElementById('f_dst').value.trim(),eta:document.getElementById('f_eta').value.trim(),date:document.getElementById('f_dt').value,time:document.getElementById('f_tm').value,miles:mi,roundTrip:rt,costPerMile:rate,calculatedCost:cc,overrideCost:ov?parseFloat(ov):null,finalCost:fc,status:document.getElementById('f_st').value,notes:document.getElementById('f_nt').value.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
 try{if(eid){await db.collection('dispatches').doc(eid).update(d);toast('Updated','success')}else{d.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('dispatches').add(d);toast('Created','success')}closeM()}catch(er){toast(er.message,'error')}}
 async function delD(id){if(!confirm('Delete this dispatch?'))return;await db.collection('dispatches').doc(id).delete();toast('Deleted','error');closeM()}
 
@@ -300,14 +315,14 @@ openM('Dispatch Details',`<div class="dg">
 <div class="dd"></div>
 <div class="di"><label>Driver</label><span>${E(d.driverName)||'—'}</span></div><div class="di"><label>Origin</label><span>${E(d.origin)||'—'}</span></div>
 <div class="di"><label>Destination</label><span>${E(d.destination)||'—'}</span></div><div class="di"><label>Date</label><span class="mono">${fd(d.date)}${d.time?' @ '+d.time:''}</span></div>
-<div class="di"><label>Miles</label><span class="mono">${d.miles||'—'}${d.roundTrip?' (RT)':''}</span></div><div class="di"><label>Total Cost</label><span class="mono" style="color:var(--s-done);font-weight:700;font-size:18px">${fm(d.finalCost)}</span></div>
+<div class="di"><label>Miles</label><span class="mono">${d.miles||'—'}${d.roundTrip?' (RT)':''}</span></div><div class="di"><label>Drive Time</label><span class="mono">${E(d.eta)||'—'}</span></div><div class="di"><label>Total Cost</label><span class="mono" style="color:var(--s-done);font-weight:700;font-size:18px">${fm(d.finalCost)}</span></div>
 ${d.notes?`<div class="di" style="grid-column:1/-1"><label>Notes</label><span>${E(d.notes)}</span></div>`:''}
 </div>`,
 `<button class="btn btn-d btn-sm" onclick="delD('${id}')">Delete</button><div style="flex:1"></div>${ca?`<button class="btn btn-s btn-sm" onclick="advD('${id}','${ns}')">→ ${ns}</button>`:''}<button class="btn btn-p btn-sm" onclick="closeM();openDF('${id}')">Edit</button>`)}
 
 async function advD(id,ns){await db.collection('dispatches').doc(id).update({status:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('→ '+ns,'info');closeM()}
 
-function exportCSV(){const d=window._dd||[];if(!d.length){toast('No data','info');return}const h='Stock #,VIN,Vehicle,Customer,Phone,Address,Driver,Origin,Destination,Date,Time,Miles,RT,Cost,Status,Notes',f=['stockNumber','vin','vehicle','customerName','customerPhone','customerAddress','driverName','origin','destination','date','time','miles','roundTrip','finalCost','status','notes'];const csv=[h,...d.map(x=>f.map(k=>`"${String(x[k]||'').replace(/"/g,'""')}"`).join(','))].join('\n');const b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`aag-dispatch-${new Date().toISOString().split('T')[0]}.csv`;a.click();toast('Exported','success')}
+function exportCSV(){const d=window._dd||[];if(!d.length){toast('No data','info');return}const h='Stock #,VIN,Vehicle,Customer,Phone,Address,Driver,Origin,Destination,Date,Time,Miles,RT,ETA,Cost,Status,Notes',f=['stockNumber','vin','vehicle','customerName','customerPhone','customerAddress','driverName','origin','destination','date','time','miles','roundTrip','eta','finalCost','status','notes'];const csv=[h,...d.map(x=>f.map(k=>`"${String(x[k]||'').replace(/"/g,'""')}"`).join(','))].join('\n');const b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`aag-dispatch-${new Date().toISOString().split('T')[0]}.csv`;a.click();toast('Exported','success')}
 
 // ═══ TRANSPORT CALENDAR ═══
 function pgTCal(c){window._tcd=new Date();window._tcv='month';c.innerHTML=`<div class="page-hdr"><h1>Transport Calendar</h1><button class="btn btn-p btn-sm" onclick="openDF()">+ New Dispatch</button></div>
@@ -330,18 +345,58 @@ function pcN(dir){window._pcd.setMonth(window._pcd.getMonth()+dir);rPC()}
 
 function rPC(){const d=window._pcd,y=d.getFullYear(),mo=d.getMonth();document.getElementById('pcT').textContent=d.toLocaleDateString('en-US',{month:'long',year:'numeric'});const fd2=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),td=new Date().toISOString().split('T')[0],runs=window._pr||[],ia=CUD.role==='admin';const bd={};runs.forEach(r=>{if(r.date)(bd[r.date]=bd[r.date]||[]).push(r)});
 let h='<div class="cal-grid">';['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cal-dh">${d}</div>`);const pm=new Date(y,mo,0).getDate();for(let i=fd2-1;i>=0;i--)h+=`<div class="cal-d om"><div class="cal-dn">${pm-i}</div></div>`;
-for(let day=1;day<=dim;day++){const ds=`${y}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,it=ds===td,dr=bd[ds]||[];h+=`<div class="cal-d ${it?'today':''}" ${ia?`onclick="openPR(null,'${ds}')" style="cursor:pointer"`:''}><div class="cal-dn">${day}${dr.length?`<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px">${dr.length}</span>`:''}</div>`;
-dr.forEach((r,idx)=>{h+=`<div class="cal-ev pc-${idx%8}" style="color:#fff" onclick="event.stopPropagation();openPRD('${r.id}')">${E(r.porterName)} ${r.startTime||''} (${r.durationHours||'?'}h)</div>`});h+='</div>'}
+for(let day=1;day<=dim;day++){const ds=`${y}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,it=ds===td,dr=bd[ds]||[];
+// Count total porters out (each porter in a multi-porter run counts separately)
+let pCount=0;dr.forEach(r=>{pCount+=(r.porterNames||[r.porterName]).length});
+h+=`<div class="cal-d ${it?'today':''}" onclick="openDayView('${ds}')" style="cursor:pointer"><div class="cal-dn">${day}${pCount?`<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px">${pCount}</span>`:''}</div>`;
+dr.forEach((r,idx)=>{const names=(r.porterNames||[r.porterName]).join(', ');h+=`<div class="cal-ev pc-${idx%8}" style="color:#fff" onclick="event.stopPropagation();openPRD('${r.id}')">${E(names)} ${r.startTime||''} (${r.durationHours||'?'}h)</div>`});h+='</div>'}
 const tc=fd2+dim,rem=(7-tc%7)%7;for(let i=1;i<=rem;i++)h+=`<div class="cal-d om"><div class="cal-dn">${i}</div></div>`;h+='</div>';document.getElementById('pcB').innerHTML=h}
 
-function openPRD(id){const r=(window._pr||[]).find(x=>x.id===id);if(!r)return;const ia=CUD.role==='admin';openM('Porter Run',`<div class="dg"><div class="di"><label>Porter</label><span>${E(r.porterName)}</span></div><div class="di"><label>Date</label><span class="mono">${fd(r.date)}</span></div><div class="di"><label>Start</label><span class="mono">${r.startTime||'—'}</span></div><div class="di"><label>Duration</label><span>${r.durationHours||'?'} hours</span></div>${r.notes?`<div class="di" style="grid-column:1/-1"><label>Notes</label><span>${E(r.notes)}</span></div>`:''}</div>`,ia?`<button class="btn btn-d btn-sm" onclick="delPR('${id}')">Delete</button><div style="flex:1"></div><button class="btn btn-p btn-sm" onclick="closeM();openPR('${id}')">Edit</button>`:'','480px')}
+function openPRD(id){const r=(window._pr||[]).find(x=>x.id===id);if(!r)return;const ia=CUD.role==='admin';const names=(r.porterNames||[r.porterName]).join(', ');openM('Porter Run',`<div class="dg"><div class="di"><label>Porter(s)</label><span>${E(names)}</span></div><div class="di"><label>Date</label><span class="mono">${fd(r.date)}</span></div><div class="di"><label>Start</label><span class="mono">${r.startTime||'—'}</span></div><div class="di"><label>Duration</label><span>${r.durationHours||'?'} hours</span></div>${r.notes?`<div class="di" style="grid-column:1/-1"><label>Notes</label><span>${E(r.notes)}</span></div>`:''}</div>`,ia?`<button class="btn btn-d btn-sm" onclick="delPR('${id}')">Delete</button><div style="flex:1"></div><button class="btn btn-p btn-sm" onclick="closeM();openPR('${id}')">Edit</button>`:'','480px')}
 
 async function openPR(eid,pfDate){const ps=await db.collection('porters').orderBy('name').get(),porters=ps.docs.map(d=>({id:d.id,...d.data()}));let ed=null;if(eid){const doc=await db.collection('porterRuns').doc(eid).get();ed=doc.data()}
-const pOpts=porters.map(p=>`<option value="${p.id}" data-name="${E(p.name)}" ${ed&&ed.porterId===p.id?'selected':''}>${E(p.name)}</option>`).join('');
-openM(eid?'Edit Run':'Add Run',`<form id="prForm" onsubmit="savePR(event,'${eid||''}')"><div class="form-grid"><div class="form-group"><label>Porter</label><select id="pr_p" required><option value="">Select...</option>${pOpts}</select></div><div class="form-group"><label>Date</label><input type="date" id="pr_d" required value="${ed?.date||pfDate||new Date().toISOString().split('T')[0]}"></div><div class="form-group"><label>Start Time</label><input type="time" id="pr_t" value="${ed?.startTime||'08:00'}"></div><div class="form-group"><label>Duration (hrs)</label><input type="number" id="pr_h" min="0.5" max="24" step="0.5" value="${ed?.durationHours||2}"></div><div class="form-group full"><label>Notes</label><textarea id="pr_n" rows="3" style="resize:vertical" placeholder="What are they doing?">${E(ed?.notes||'')}</textarea></div></div></form>`,
+const selIds=ed?(ed.porterIds||[ed.porterId]):[];
+const pChecks=porters.map(p=>`<label class="form-check" style="padding:6px 0"><input type="checkbox" class="pr_pc" value="${p.id}" data-name="${E(p.name)}" ${selIds.includes(p.id)?'checked':''}> ${E(p.name)}</label>`).join('');
+openM(eid?'Edit Run':'Add Run',`<form id="prForm" onsubmit="savePR(event,'${eid||''}')"><div class="form-grid"><div class="form-group full"><label>Porter(s)</label><div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r)">${pChecks}</div></div><div class="form-group"><label>Date</label><input type="date" id="pr_d" required value="${ed?.date||pfDate||new Date().toISOString().split('T')[0]}"></div><div class="form-group"><label>Start Time</label><input type="time" id="pr_t" value="${ed?.startTime||'08:00'}"></div><div class="form-group"><label>Duration (hrs)</label><input type="number" id="pr_h" min="0.5" max="24" step="0.5" value="${ed?.durationHours||2}"></div><div class="form-group full"><label>Notes</label><textarea id="pr_n" rows="3" style="resize:vertical" placeholder="What are they doing?">${E(ed?.notes||'')}</textarea></div></div></form>`,
 `<button class="btn btn-s" onclick="closeM()">Cancel</button>${eid?`<button class="btn btn-d btn-sm" onclick="delPR('${eid}')">Delete</button>`:''}<button class="btn btn-p" onclick="document.getElementById('prForm').requestSubmit()">${eid?'Update':'Add'}</button>`,'500px')}
 
-async function savePR(e,eid){e.preventDefault();const sel=document.getElementById('pr_p'),d={porterId:sel.value,porterName:sel.selectedOptions[0]?.dataset.name||'',date:document.getElementById('pr_d').value,startTime:document.getElementById('pr_t').value,durationHours:parseFloat(document.getElementById('pr_h').value),notes:document.getElementById('pr_n').value.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};try{if(eid){await db.collection('porterRuns').doc(eid).update(d);toast('Updated','success')}else{d.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('porterRuns').add(d);toast('Added','success')}closeM()}catch(er){toast(er.message,'error')}}
+async function savePR(e,eid){e.preventDefault();const checks=document.querySelectorAll('.pr_pc:checked');if(!checks.length){toast('Select at least one porter','error');return}const porterIds=[],porterNames=[];checks.forEach(c=>{porterIds.push(c.value);porterNames.push(c.dataset.name)});const d={porterIds,porterNames,porterName:porterNames.join(', '),date:document.getElementById('pr_d').value,startTime:document.getElementById('pr_t').value,durationHours:parseFloat(document.getElementById('pr_h').value),notes:document.getElementById('pr_n').value.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};try{if(eid){await db.collection('porterRuns').doc(eid).update(d);toast('Updated','success')}else{d.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('porterRuns').add(d);toast('Added','success')}closeM()}catch(er){toast(er.message,'error')}}
+
+function openDayView(ds){const runs=(window._pr||[]).filter(r=>r.date===ds);const ia=CUD.role==='admin';const dayLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+// Expand runs into individual porter entries
+const entries=[];runs.forEach(r=>{const names=r.porterNames||[r.porterName];const ids=r.porterIds||[r.porterId];names.forEach((name,i)=>{entries.push({name,porterId:ids[i]||'',startTime:r.startTime||'08:00',durationHours:r.durationHours||2,notes:r.notes,runId:r.id})})});
+// Build vertical timeline from 5am to 8pm
+const startH=5,endH=20;let bodyH='';
+if(entries.length){
+// Sort by start time
+entries.sort((a,b)=>a.startTime.localeCompare(b.startTime));
+bodyH+=`<div style="position:relative;margin-top:8px">`;
+// Hour rows
+for(let h=startH;h<=endH;h++){const lbl=h>12?(h-12)+' PM':h===12?'12 PM':h+' AM';const isWork=h>=7&&h<=17;
+bodyH+=`<div style="display:flex;align-items:flex-start;height:48px;border-top:1px solid ${isWork?'var(--border)':'var(--bg-input)'}">
+<div style="width:60px;flex-shrink:0;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-muted);padding-top:2px;text-align:right;padding-right:12px">${lbl}</div>
+<div style="flex:1;position:relative;height:100%"></div></div>`}
+// Overlay porter bars - arrange side by side when overlapping
+const totalH=(endH-startH+1)*48;
+// Calculate overlap groups
+entries.forEach(ent=>{const[sh,sm]=ent.startTime.split(':').map(Number);ent._startMin=(sh-startH)*60+sm;ent._endMin=ent._startMin+ent.durationHours*60});
+// Assign columns: greedy left-to-right
+entries.forEach(ent=>{ent._col=0;ent._totalCols=1});
+for(let i=0;i<entries.length;i++){let col=0;for(let j=0;j<i;j++){if(entries[j]._endMin>entries[i]._startMin&&entries[j]._startMin<entries[i]._endMin){if(entries[j]._col>=col)col=entries[j]._col+1}}entries[i]._col=col}
+// Calculate max concurrent columns for each entry's time range
+for(let i=0;i<entries.length;i++){let maxCol=entries[i]._col;for(let j=0;j<entries.length;j++){if(j!==i&&entries[j]._endMin>entries[i]._startMin&&entries[j]._startMin<entries[i]._endMin){if(entries[j]._col>maxCol)maxCol=entries[j]._col}}entries[i]._totalCols=maxCol+1}
+
+bodyH+=`<div style="position:absolute;top:0;left:60px;right:0;height:${totalH}px;pointer-events:none">`;
+entries.forEach((ent,idx)=>{const topPx=ent._startMin/60*48;const heightPx=ent.durationHours*48;const ci=idx%8;const endTime=new Date(2000,0,1,0,0);endTime.setMinutes(ent._startMin+startH*60+ent.durationHours*60);const endStr=endTime.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});const stTime=new Date(2000,0,1,0,0);stTime.setMinutes(ent._startMin+startH*60);const startStr=stTime.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+const colW=100/ent._totalCols;const leftPct=ent._col*colW;
+bodyH+=`<div class="pc-${ci}" style="pointer-events:auto;position:absolute;top:${topPx}px;left:${leftPct}%;width:${colW}%;height:${Math.max(heightPx,28)}px;border-radius:6px;display:flex;flex-direction:column;justify-content:center;padding:8px 10px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;opacity:0.92;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid var(--bg-card);overflow:hidden" onclick="openPRD('${ent.runId}')">
+<span style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${E(ent.name)}</span>
+<span style="font-size:10px;opacity:0.8;margin-top:2px">${startStr} – ${endStr}</span></div>`});
+bodyH+='</div></div>'}else{bodyH=`<div class="empty" style="padding:24px"><h3>No runs scheduled</h3><p>Click "Add Run" to schedule porters for this day.</p></div>`}
+// Summary line
+if(entries.length){bodyH=`<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">${entries.length} porter${entries.length>1?'s':''} off the lot</div>`+bodyH}
+openM(dayLabel,bodyH,
+ia?`<button class="btn btn-s" onclick="closeM()">Close</button><button class="btn btn-p btn-sm" onclick="closeM();openPR(null,'${ds}')">+ Add Run</button>`:`<button class="btn btn-s" onclick="closeM()">Close</button>`,'560px')}
 async function delPR(id){if(!confirm('Delete this run?'))return;await db.collection('porterRuns').doc(id).delete();toast('Deleted','error');closeM()}
 
 // ═══ MY TRIPS (Driver) ═══
@@ -353,10 +408,11 @@ function setMTF(f,b){window._mtf=f;b.parentElement.querySelectorAll('.fb').forEa
 function rMT(){const f=window._mtf;let t=(window._mt||[]).filter(x=>f==='all'||x.status===f);t.sort((a,b)=>(b.date||'').localeCompare(a.date||''));const bd=document.getElementById('mtB'),em=document.getElementById('mtE');if(!t.length){bd.innerHTML='';em.style.display='block';return}em.style.display='none';
 bd.innerHTML=t.map(t=>`<div class="trip-card"><div class="tc-hdr"><div><div class="tc-v">${E(t.vehicle)}</div><div class="tc-s">${E(t.stockNumber)}</div></div><span class="sb ${sc(t.status)}">${E(t.status)}</span></div>
 <div class="tc-route"><div class="rp">${E(t.origin||'—')}</div><div class="ra">→</div><div class="rp">${E(t.destination||'—')}</div>${t.roundTrip?'<span style="font-size:11px;color:var(--text-muted);margin-left:8px">(Round Trip)</span>':''}</div>
-<div class="tc-grid"><div class="tc-f"><label>Customer</label><span>${E(t.customerName)}</span></div><div class="tc-f"><label>Phone</label><span>${t.customerPhone?`<a href="tel:${E(t.customerPhone)}" style="color:var(--accent)">${E(t.customerPhone)}</a>`:'—'}</span></div><div class="tc-f"><label>Date</label><span class="mono">${fd(t.date)}${t.time?' @ '+t.time:''}</span></div><div class="tc-f"><label>Miles</label><span class="mono">${t.miles||'—'}${t.roundTrip?' (×2 RT)':''}</span></div>${t.customerAddress?`<div class="tc-f" style="grid-column:1/-1"><label>Address</label><span>${E(t.customerAddress)}</span></div>`:''}${t.notes?`<div class="tc-f" style="grid-column:1/-1"><label>Notes</label><span>${E(t.notes)}</span></div>`:''}</div>
+<div class="tc-grid"><div class="tc-f"><label>Customer</label><span>${E(t.customerName)}</span></div><div class="tc-f"><label>Phone</label><span>${t.customerPhone?`<a href="tel:${E(t.customerPhone)}" style="color:var(--accent)">${E(t.customerPhone)}</a>`:'—'}</span></div><div class="tc-f"><label>Date</label><span class="mono">${fd(t.date)}${t.time?' @ '+t.time:''}</span></div><div class="tc-f"><label>Miles</label><span class="mono">${t.miles||'—'}${t.roundTrip?' (×2 RT)':''}</span></div><div class="tc-f"><label>Drive Time</label><span class="mono">${E(t.eta)||'—'}</span></div>${t.customerAddress?`<div class="tc-f" style="grid-column:1/-1"><label>Address</label><span>${E(t.customerAddress)}</span></div>`:''}${t.notes?`<div class="tc-f" style="grid-column:1/-1"><label>Notes</label><span>${E(t.notes)}</span></div>`:''}</div>
 <div class="tc-cost">${fm(t.finalCost)}</div>
-${t.status==='Dispatched'||t.status==='In Transit'?`<button class="btn btn-p" style="width:100%;justify-content:center" onclick="markDel('${t.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Mark as Delivered</button>`:''}</div>`).join('')}
-async function markDel(id){if(!confirm('Mark as Delivered?'))return;await db.collection('dispatches').doc(id).update({status:'Delivered',updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('Delivered!','success')}
+${t.status==='Pending'||t.status==='Dispatched'?`<button class="btn btn-s" style="width:100%;justify-content:center" onclick="drvAdv('${t.id}','In Transit')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Mark In Transit</button>`:''}
+${t.status==='In Transit'?`<button class="btn btn-p" style="width:100%;justify-content:center" onclick="drvAdv('${t.id}','Delivered')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Mark as Delivered</button>`:''}</div>`).join('')}
+async function drvAdv(id,ns){if(!confirm('Mark as '+ns+'?'))return;await db.collection('dispatches').doc(id).update({status:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('→ '+ns,'success')}
 
 // ═══ MANAGE USERS ═══
 function pgUsers(c){c.innerHTML=`<div class="page-hdr"><h1>User Management</h1></div><div class="page-body"><div class="card"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="uTB"></tbody></table></div></div>`;
