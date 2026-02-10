@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AAG Dispatch</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBi4fmwz_eVwX2Ts24R2jmjqkSXtuHZZ6U&libraries=places"></script>
+<style>
+:root{--bg-primary:#0c0e14;--bg-secondary:#12151e;--bg-card:#1a1e2b;--bg-input:#222738;--bg-hover:#252a3d;--border:#2a2f42;--border-focus:#4a7cff;--text-primary:#e4e7f0;--text-secondary:#8890a8;--text-muted:#555d78;--accent:#4a7cff;--accent-hover:#5e8dff;--accent-dim:rgba(74,124,255,0.1);--s-pend:#f59e0b;--s-pend-bg:rgba(245,158,11,0.1);--s-disp:#6366f1;--s-disp-bg:rgba(99,102,241,0.1);--s-tran:#3b82f6;--s-tran-bg:rgba(59,130,246,0.1);--s-done:#22c55e;--s-done-bg:rgba(34,197,94,0.1);--danger:#ef4444;--danger-hover:#dc2626;--warning:#f59e0b;--r:8px;--rl:12px}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;overflow-x:hidden}a{color:var(--accent);text-decoration:none}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg-primary)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.auth-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rl);padding:40px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+.logo-box{width:44px;height:44px;background:var(--accent);border-radius:var(--r);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:#fff;flex-shrink:0}
+.auth-logo h1{font-size:22px;font-weight:700;letter-spacing:-.3px}.auth-logo p{font-size:13px;color:var(--text-secondary)}
+.auth-tabs{display:flex;margin-bottom:24px;background:var(--bg-input);border-radius:var(--r);padding:3px}
+.auth-tab{flex:1;padding:10px;text-align:center;font-size:14px;font-weight:600;color:var(--text-muted);cursor:pointer;border-radius:6px;transition:.15s}
+.auth-tab.active{background:var(--accent);color:#fff}
+.auth-msg{padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:16px;display:none}
+.auth-msg.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#f87171}
+.auth-msg.info{background:var(--accent-dim);border:1px solid rgba(74,124,255,.3);color:var(--accent)}
+.pending-screen{text-align:center;padding:60px 20px}.pending-screen h2{font-size:24px;margin-bottom:12px}.pending-screen p{color:var(--text-secondary);font-size:15px;line-height:1.6;max-width:400px;margin:0 auto 24px}
+
+.app-layout{display:flex;min-height:100vh}
+.sidebar{width:240px;background:var(--bg-secondary);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:50;transition:transform .2s}
+.sidebar-hdr{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.sidebar-hdr .logo-box{width:36px;height:36px;font-size:13px}.sidebar-hdr h2{font-size:16px;font-weight:700}
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);padding:16px 12px 8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r);font-size:14px;font-weight:500;color:var(--text-secondary);cursor:pointer;transition:.12s}
+.nav-item:hover{background:var(--bg-hover);color:var(--text-primary)}.nav-item.active{background:var(--accent-dim);color:var(--accent)}
+.nav-item svg{width:18px;height:18px;flex-shrink:0}
+.sidebar-ft{padding:14px 16px;border-top:1px solid var(--border)}
+.user-info{display:flex;align-items:center;gap:10px;padding:8px}
+.user-avatar{width:32px;height:32px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
+.user-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-role{font-size:11px;color:var(--text-muted);text-transform:capitalize}
+.logout-btn{display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:8px;width:100%;border:none;background:none;color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;border-radius:var(--r);transition:.12s}
+.logout-btn:hover{background:rgba(239,68,68,.08);color:var(--danger)}
+.main-content{flex:1;margin-left:240px;min-height:100vh}
+.page-hdr{padding:24px 28px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.page-hdr h1{font-size:22px;font-weight:700;letter-spacing:-.3px}
+.page-body{padding:20px 28px 28px}
+
+.mob-toggle{display:none;position:fixed;top:14px;left:14px;z-index:60;width:40px;height:40px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);align-items:center;justify-content:center;cursor:pointer;color:var(--text-primary)}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:45}
+@media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.sb-overlay.open{display:block}.mob-toggle{display:flex}.main-content{margin-left:0}.page-hdr,.page-body{padding-left:16px;padding-right:16px}.page-hdr{padding-top:60px}.form-grid{grid-template-columns:1fr!important}}
+
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:var(--r);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:.15s;white-space:nowrap}
+.btn-p{background:var(--accent);color:#fff}.btn-p:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.btn-s{background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border)}.btn-s:hover{border-color:var(--text-muted)}
+.btn-d{background:var(--danger);color:#fff}.btn-d:hover{background:var(--danger-hover)}
+.btn-sm{padding:7px 13px;font-size:13px}.btn-xs{padding:5px 10px;font-size:12px}
+.btn-icon{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;color:var(--text-secondary);transition:.15s}
+.btn-icon:hover{color:var(--text-primary);border-color:var(--text-muted)}
+
+.sb{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
+.sb::before{content:'';width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb.pending{background:var(--s-pend-bg);color:var(--s-pend)}.sb.pending::before{background:var(--s-pend)}
+.sb.dispatched{background:var(--s-disp-bg);color:var(--s-disp)}.sb.dispatched::before{background:var(--s-disp)}
+.sb.in-transit{background:var(--s-tran-bg);color:var(--s-tran)}.sb.in-transit::before{background:var(--s-tran)}
+.sb.delivered{background:var(--s-done-bg);color:var(--s-done)}.sb.delivered::before{background:var(--s-done)}
+
+.rb{display:inline-flex;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;text-transform:capitalize}
+.rb.admin{background:rgba(239,68,68,.1);color:#f87171}.rb.driver{background:rgba(99,102,241,.1);color:#818cf8}.rb.viewer{background:rgba(34,197,94,.1);color:#4ade80}.rb.pending{background:rgba(245,158,11,.1);color:#fbbf24}
+
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 14px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);background:var(--bg-secondary);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:11px 14px;font-size:14px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{transition:background .1s;cursor:pointer}tbody tr:hover{background:var(--bg-hover)}tbody tr:last-child td{border-bottom:none}
+.mono{font-family:'JetBrains Mono',monospace;font-size:13px}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-group{display:flex;flex-direction:column;gap:5px}.form-group.full{grid-column:1/-1}
+.form-group label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)}
+.form-group input,.form-group select,.form-group textarea{padding:10px 14px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r);color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:14px;transition:border-color .15s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--border-focus)}
+.form-group select{cursor:pointer}.form-group select option{background:var(--bg-card)}
+.form-section{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;padding-bottom:8px;margin-top:4px;border-bottom:1px solid var(--border);grid-column:1/-1}
+.form-check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px}.form-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
+.cost-box{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--s-done);padding:12px 16px;background:var(--bg-secondary);border-radius:var(--r);text-align:center;border:1px solid var(--border)}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;visibility:hidden;transition:.2s}
+.modal-overlay.active{opacity:1;visibility:visible}
+.modal{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rl);width:95%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.5);transform:translateY(20px);transition:transform .2s}
+.modal-overlay.active .modal{transform:translateY(0)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--border)}.modal-hdr h2{font-size:17px;font-weight:700}
+.modal-body{padding:24px}.modal-ft{display:flex;justify-content:flex-end;gap:10px;padding:14px 24px;border-top:1px solid var(--border)}
+
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);padding:16px;display:flex;align-items:center;gap:14px}
+.stat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.stat-count{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace}.stat-label{font-size:12px;color:var(--text-secondary);font-weight:500}
+
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.search-box{flex:1;min-width:200px;position:relative}
+.search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none}
+.search-box input{width:100%;padding:10px 14px 10px 38px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r);color:var(--text-primary);font-family:'DM Sans',sans-serif;font-size:14px}
+.search-box input:focus{outline:none;border-color:var(--border-focus)}.search-box input::placeholder{color:var(--text-muted)}
+.fg{display:flex;gap:6px;flex-wrap:wrap}
+.fb{padding:7px 14px;border-radius:20px;font-size:13px;font-weight:600;background:var(--bg-input);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;font-family:'DM Sans',sans-serif;transition:.15s}
+.fb:hover{border-color:var(--text-muted);color:var(--text-primary)}.fb.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+
+.cal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}.cal-hdr h3{font-size:18px;font-weight:700}
+.cal-nav{display:flex;gap:8px}
+.cal-toggle{display:flex;background:var(--bg-input);border-radius:var(--r);padding:3px;margin-left:12px}
+.cal-toggle button{padding:7px 14px;font-size:13px;font-weight:600;border:none;background:none;color:var(--text-muted);cursor:pointer;border-radius:6px;font-family:'DM Sans',sans-serif;transition:.15s}
+.cal-toggle button.active{background:var(--accent);color:#fff}
+
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.cal-dh{padding:10px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);background:var(--bg-secondary)}
+.cal-d{background:var(--bg-card);min-height:100px;padding:8px;transition:background .1s}.cal-d:hover{background:var(--bg-hover)}.cal-d.om{opacity:.3}.cal-d.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cal-dn{font-size:13px;font-weight:600;margin-bottom:4px;display:flex;justify-content:space-between}
+.cal-ev{padding:3px 6px;border-radius:4px;font-size:11px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;transition:opacity .1s}.cal-ev:hover{opacity:.8}
+
+.wk-agenda{display:flex;flex-direction:column;gap:8px}
+.wk-day{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.wk-dh{padding:12px 16px;background:var(--bg-secondary);font-size:14px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.wk-dh.today{border-left:3px solid var(--accent)}
+.wk-db{padding:8px 16px}
+.wk-ev{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}.wk-ev:last-child{border-bottom:none}
+.wk-et{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-muted);width:60px;flex-shrink:0}
+.wk-ec{flex:1;min-width:0}.wk-en{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wk-es{font-size:12px;color:var(--text-secondary)}
+
+.dg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.di label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:4px}.di span,.di a{font-size:14px;color:var(--text-primary)}
+.dd{grid-column:1/-1;border-top:1px solid var(--border);margin:4px 0}
+
+.tc{padding:12px 20px;border-radius:var(--r);font-size:14px;font-weight:500;background:var(--bg-card);border:1px solid var(--border);box-shadow:0 4px 16px rgba(0,0,0,.3);color:var(--text-primary);animation:ti .3s ease,to .3s ease 2.7s;display:flex;align-items:center;gap:8px}
+.tc.success{border-left:3px solid var(--s-done)}.tc.info{border-left:3px solid var(--accent)}.tc.error{border-left:3px solid var(--danger)}
+@keyframes ti{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes to{to{opacity:0;transform:translateX(30px)}}
+
+.empty{text-align:center;padding:48px 20px;color:var(--text-muted)}.empty h3{font-size:16px;color:var(--text-secondary);margin-bottom:6px}.empty p{font-size:13px;margin-bottom:16px}
+
+.trip-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--rl);padding:20px;margin-bottom:12px;transition:border-color .15s}.trip-card:hover{border-color:var(--text-muted)}
+.tc-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.tc-v{font-size:16px;font-weight:700}.tc-s{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-muted)}
+.tc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.tc-f label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:2px}.tc-f span{font-size:14px}
+.tc-cost{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:var(--s-done);text-align:center;padding:12px;background:var(--bg-secondary);border-radius:var(--r);border:1px solid var(--border);margin-bottom:16px}
+.tc-route{display:flex;align-items:center;gap:12px;padding:12px 0;margin-bottom:12px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.tc-route .rp{font-size:14px;font-weight:600}.tc-route .ra{color:var(--text-muted);font-size:18px;flex-shrink:0}
+
+.pc-0{background:#4a7cff}.pc-1{background:#f59e0b}.pc-2{background:#22c55e}.pc-3{background:#ef4444}.pc-4{background:#a855f7}.pc-5{background:#ec4899}.pc-6{background:#14b8a6}.pc-7{background:#f97316}
+
+.screen{display:none}.screen.active{display:flex}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div class="auth-screen screen" id="authScreen">
+<div class="auth-card">
+<div class="auth-logo"><div class="logo-box">AAG</div><div><h1>AAG Dispatch</h1><p>Anderson Auto Group</p></div></div>
+<div class="auth-tabs"><div class="auth-tab active" onclick="showAuthTab('login')">Sign In</div><div class="auth-tab" onclick="showAuthTab('signup')">Sign Up</div></div>
+<div class="auth-msg error" id="authErr"></div>
+<div id="loginForm"><div class="form-grid" style="grid-template-columns:1fr"><div class="form-group"><label>Email</label><input type="email" id="lEmail" placeholder="you@example.com"></div><div class="form-group"><label>Password</label><input type="password" id="lPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div><button class="btn btn-p" style="width:100%;justify-content:center" onclick="doLogin()">Sign In</button></div></div>
+<div id="signupForm" style="display:none"><div class="form-grid" style="grid-template-columns:1fr"><div class="form-group"><label>Full Name</label><input type="text" id="sName" placeholder="John Smith"></div><div class="form-group"><label>Email</label><input type="email" id="sEmail" placeholder="you@example.com"></div><div class="form-group"><label>Password</label><input type="password" id="sPass" placeholder="Min 6 characters" onkeydown="if(event.key==='Enter')doSignup()"></div><button class="btn btn-p" style="width:100%;justify-content:center" onclick="doSignup()">Create Account</button></div></div>
+</div></div>
+
+<!-- PENDING -->
+<div class="auth-screen screen" id="pendingScreen"><div class="auth-card"><div class="pending-screen">
+<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+<h2>Awaiting Approval</h2><p>Your account has been created. An administrator needs to approve your access and assign your role.</p>
+<button class="btn btn-s" onclick="doLogout()">Sign Out</button>
+</div></div></div>
+
+<!-- APP -->
+<div class="screen" id="appScreen">
+<button class="mob-toggle" onclick="toggleSB()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+<div class="sb-overlay" id="sbOv" onclick="toggleSB()"></div>
+<aside class="sidebar" id="sidebar">
+<div class="sidebar-hdr"><div class="logo-box" style="width:36px;height:36px;font-size:13px">AAG</div><h2>Dispatch</h2></div>
+<nav class="sidebar-nav" id="sidebarNav"></nav>
+<div class="sidebar-ft"><div class="user-info"><div class="user-avatar" id="uAvatar">?</div><div style="overflow:hidden"><div class="user-name" id="uName">—</div><div class="user-role" id="uRole">—</div></div></div>
+<button class="logout-btn" onclick="doLogout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</button></div>
+</aside>
+<main class="main-content" id="mainC"></main>
+</div>
+
+<div class="toast-container" id="toastC" style="position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px"></div>
+
+<div class="modal-overlay" id="gModal">
+<div class="modal" id="gModalC">
+<div class="modal-hdr"><h2 id="gMTitle">Modal</h2><button class="btn-icon" onclick="closeM()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+<div class="modal-body" id="gMBody"></div>
+<div class="modal-ft" id="gMFoot"></div>
+</div></div>
+
+<script>
+const FC={apiKey:"AIzaSyAZeoB413bEcrJ-KNIDGXo694RyT4McUK8",authDomain:"aag-dispatch.firebaseapp.com",projectId:"aag-dispatch",storageBucket:"aag-dispatch.firebasestorage.app",messagingSenderId:"975432478502",appId:"1:975432478502:web:104bee8ea400099712dbe7"};
+firebase.initializeApp(FC);const auth=firebase.auth(),db=firebase.firestore();
+let CU=null,CUD=null,CP='',unsubs=[];
+const DL=['Toyota - LHC','Nissan - LHC','CDJR - LHC','Honda - Kingman','Chevrolet - Kingman','Ford - Kingman','Ford - BHC'];
+const DL_ADDR={'Toyota - LHC':'6510 Showplace Ave, Lake Havasu City, AZ','Nissan - LHC':'3482 AZ-95, Lake Havasu City, AZ','CDJR - LHC':'3920 AZ-95, Lake Havasu City, AZ','Honda - Kingman':'3800 Stockton Hill Rd, Kingman, AZ','Chevrolet - Kingman':'3730 Stockton Hill Rd, Kingman, AZ','Ford - Kingman':'3601 Stockton Hill Rd, Kingman, AZ','Ford - BHC':'2585 S Hwy 95, Bullhead City, AZ'};
+const GMAP_KEY='AIzaSyBi4fmwz_eVwX2Ts24R2jmjqkSXtuHZZ6U';
+const ST=['Pending','Dispatched','In Transit','Delivered'];
+
+function E(s){if(!s)return'';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function toast(m,t='info'){const c=document.getElementById('toastC'),el=document.createElement('div');el.className='tc '+t;el.textContent=m;c.appendChild(el);setTimeout(()=>el.remove(),3000)}
+function sc(s){return{Pending:'pending',Dispatched:'dispatched','In Transit':'in-transit',Delivered:'delivered'}[s]||''}
+function fd(d){if(!d)return'—';const[y,m,day]=d.split('-');return m+'/'+day+'/'+y}
+function fm(v){return v?'$'+parseFloat(v).toFixed(2):'—'}
+function ini(n){return(n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+function showS(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id)?.classList.add('active')}
+function toggleSB(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sbOv').classList.toggle('open')}
+
+// Modal
+function openM(title,body,footer,w){document.getElementById('gMTitle').textContent=title;document.getElementById('gMBody').innerHTML=body;document.getElementById('gMFoot').innerHTML=footer;document.getElementById('gModalC').style.maxWidth=w||'640px';document.getElementById('gModal').classList.add('active')}
+function closeM(){document.getElementById('gModal').classList.remove('active')}
+document.getElementById('gModal').addEventListener('click',e=>{if(e.target.id==='gModal')closeM()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeM()});
+
+// Auth
+function showAuthTab(t){document.querySelectorAll('.auth-tab').forEach((x,i)=>x.classList.toggle('active',t==='login'?i===0:i===1));document.getElementById('loginForm').style.display=t==='login'?'block':'none';document.getElementById('signupForm').style.display=t==='signup'?'block':'none';document.getElementById('authErr').style.display='none'}
+async function doLogin(){const e=document.getElementById('lEmail').value.trim(),p=document.getElementById('lPass').value;try{document.getElementById('authErr').style.display='none';await auth.signInWithEmailAndPassword(e,p)}catch(er){document.getElementById('authErr').textContent=er.message;document.getElementById('authErr').style.display='block'}}
+async function doSignup(){const n=document.getElementById('sName').value.trim(),e=document.getElementById('sEmail').value.trim(),p=document.getElementById('sPass').value;if(!n){document.getElementById('authErr').textContent='Please enter your name.';document.getElementById('authErr').style.display='block';return}try{document.getElementById('authErr').style.display='none';const cr=await auth.createUserWithEmailAndPassword(e,p);await cr.user.updateProfile({displayName:n});await db.collection('users').doc(cr.user.uid).set({email:e,displayName:n,role:'pending',approved:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()})}catch(er){document.getElementById('authErr').textContent=er.message;document.getElementById('authErr').style.display='block'}}
+function doLogout(){unsubs.forEach(f=>f());unsubs=[];auth.signOut()}
+
+auth.onAuthStateChanged(async u=>{
+if(!u){CU=null;CUD=null;showS('authScreen');return}
+CU=u;const ref=db.collection('users').doc(u.uid),doc=await ref.get();
+if(!doc.exists){await ref.set({email:u.email,displayName:u.displayName||u.email,role:'pending',approved:false,createdAt:firebase.firestore.FieldValue.serverTimestamp()});CUD={email:u.email,displayName:u.displayName||u.email,role:'pending',approved:false}}else CUD=doc.data();
+const snap=await db.collection('users').limit(2).get();
+if(snap.size===1&&CUD.role==='pending'){await ref.update({role:'admin',approved:true});CUD.role='admin';CUD.approved=true}
+if(!CUD.approved||CUD.role==='pending'){showS('pendingScreen')}else{showS('appScreen');initApp()}
+});
+
+function initApp(){unsubs.forEach(f=>f());unsubs=[];buildNav();updUI();const r=CUD.role;if(r==='admin')nav('dispatches');else if(r==='driver')nav('my-trips');else nav('porter-board')}
+function updUI(){document.getElementById('uName').textContent=CUD.displayName||CU.email;document.getElementById('uRole').textContent=CUD.role;document.getElementById('uAvatar').textContent=ini(CUD.displayName)}
+
+function buildNav(){const n=document.getElementById('sidebarNav'),r=CUD.role;let h='';
+if(r==='admin'){h+=`<div class="nav-sec">Dispatch</div>`;h+=ni('dispatches','Dispatches','<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/>');h+=ni('transport-cal','Transport Calendar','<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>');h+=`<div class="nav-sec">Lot Porters</div>`;h+=ni('porter-board','Porter Board','<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>');h+=`<div class="nav-sec">Settings</div>`;h+=ni('manage-users','Users','<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/>');h+=ni('manage-drivers','Transport Drivers','<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>');h+=ni('manage-porters','Lot Porters','<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>')}
+else if(r==='driver'){h+=`<div class="nav-sec">My Dashboard</div>`;h+=ni('my-trips','My Trips','<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>')}
+else{h+=`<div class="nav-sec">View</div>`;h+=ni('porter-board','Porter Board','<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>')}
+n.innerHTML=h}
+function ni(p,l,svg){return`<div class="nav-item" data-page="${p}" onclick="nav('${p}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${svg}</svg>${l}</div>`}
+
+function nav(p){CP=p;document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===p));unsubs.forEach(f=>f());unsubs=[];const m=document.getElementById('mainC');document.getElementById('sidebar').classList.remove('open');document.getElementById('sbOv').classList.remove('open');
+switch(p){case'dispatches':pgDisp(m);break;case'transport-cal':pgTCal(m);break;case'porter-board':pgPorter(m);break;case'manage-users':pgUsers(m);break;case'manage-drivers':pgDrivers(m);break;case'manage-porters':pgPorters(m);break;case'my-trips':pgMyTrips(m);break;default:m.innerHTML='<div class="page-body"><div class="empty"><h3>Not found</h3></div></div>'}}
+
+// ═══ DISPATCHES PAGE ═══
+function pgDisp(c){c.innerHTML=`<div class="page-hdr"><h1>Dispatches</h1><div style="display:flex;gap:10px"><button class="btn btn-s btn-sm" onclick="exportCSV()">Export</button><button class="btn btn-p btn-sm" onclick="openDF()">+ New Dispatch</button></div></div>
+<div class="page-body"><div class="stats-row" id="dStats"></div><div class="toolbar"><div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="dSearch" placeholder="Search..." oninput="filtDT()"></div><div class="fg" id="dFilt"></div></div><div class="card"><table><thead><tr><th>Stock #</th><th>Vehicle</th><th>Customer</th><th>Driver</th><th>Route</th><th>Date</th><th>Cost</th><th>Status</th></tr></thead><tbody id="dTB"></tbody></table></div><div class="empty" id="dEmpty" style="display:none"><h3>No dispatches</h3><p>Create your first dispatch.</p></div></div>`;
+let fh='<button class="fb active" onclick="setDF(\'all\',this)">All</button>';ST.forEach(s=>fh+=`<button class="fb" onclick="setDF('${s}',this)">${s}</button>`);document.getElementById('dFilt').innerHTML=fh;
+window._df='all';window._dd=[];
+const un=db.collection('dispatches').orderBy('createdAt','desc').onSnapshot(s=>{window._dd=s.docs.map(d=>({id:d.id,...d.data()}));filtDT();updDS()});unsubs.push(un)}
+
+function updDS(){const c={Pending:0,Dispatched:0,'In Transit':0,Delivered:0};(window._dd||[]).forEach(d=>{if(c[d.status]!==undefined)c[d.status]++});document.getElementById('dStats').innerHTML=`<div class="stat-card"><div class="stat-dot" style="background:var(--s-pend)"></div><div><div class="stat-count">${c.Pending}</div><div class="stat-label">Pending</div></div></div><div class="stat-card"><div class="stat-dot" style="background:var(--s-disp)"></div><div><div class="stat-count">${c.Dispatched}</div><div class="stat-label">Dispatched</div></div></div><div class="stat-card"><div class="stat-dot" style="background:var(--s-tran)"></div><div><div class="stat-count">${c['In Transit']}</div><div class="stat-label">In Transit</div></div></div><div class="stat-card"><div class="stat-dot" style="background:var(--s-done)"></div><div><div class="stat-count">${c.Delivered}</div><div class="stat-label">Delivered</div></div></div>`}
+function setDF(f,b){window._df=f;document.querySelectorAll('#dFilt .fb').forEach(x=>x.classList.remove('active'));b.classList.add('active');filtDT()}
+function filtDT(){const s=(document.getElementById('dSearch')?.value||'').toLowerCase(),f=window._df||'all';let d=(window._dd||[]).filter(x=>{if(f!=='all'&&x.status!==f)return false;if(s){return[x.stockNumber,x.vin,x.vehicle,x.customerName,x.driverName,x.origin,x.destination].join(' ').toLowerCase().includes(s)}return true});const tb=document.getElementById('dTB'),em=document.getElementById('dEmpty');if(!tb)return;if(!d.length){tb.innerHTML='';em.style.display='block';tb.closest('table').style.display='none'}else{em.style.display='none';tb.closest('table').style.display='';tb.innerHTML=d.map(x=>`<tr onclick="openDD('${x.id}')"><td class="mono">${E(x.stockNumber)}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${E(x.vehicle)}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${E(x.customerName)}</td><td>${E(x.driverName||'—')}</td><td style="font-size:13px">${E(x.origin||'')} → ${E(x.destination||'')}</td><td class="mono">${fd(x.date)}</td><td class="mono">${fm(x.finalCost)}</td><td><span class="sb ${sc(x.status)}">${E(x.status)}</span></td></tr>`).join('')}}
+
+// Dispatch Form
+async function openDF(eid){const ds=await db.collection('drivers').orderBy('name').get(),drvs=ds.docs.map(d=>({id:d.id,...d.data()}));let ed=null;if(eid){const doc=await db.collection('dispatches').doc(eid).get();ed=doc.data()}
+const dOpts=drvs.map(d=>`<option value="${d.id}" data-rate="${d.costPerMile||0}" ${ed&&ed.driverId===d.id?'selected':''}>${E(d.name)} ($${(d.costPerMile||0).toFixed(2)}/mi)</option>`).join('');
+const dlOpts=DL.map(d=>`<option ${ed&&ed.origin===d?'selected':''}>${d}</option>`).join('');
+openM(eid?'Edit Dispatch':'New Dispatch',`<form id="dForm" onsubmit="saveD(event,'${eid||''}')"><div class="form-grid">
+<div class="form-section">Vehicle</div>
+<div class="form-group"><label>Stock #</label><input type="text" id="f_stk" required value="${E(ed?.stockNumber||'')}"></div>
+<div class="form-group"><label>VIN</label><input type="text" id="f_vin" maxlength="17" value="${E(ed?.vin||'')}"></div>
+<div class="form-group full"><label>Year / Make / Model</label><input type="text" id="f_veh" required value="${E(ed?.vehicle||'')}"></div>
+<div class="form-section">Customer</div>
+<div class="form-group"><label>Customer Name</label><input type="text" id="f_cn" required value="${E(ed?.customerName||'')}"></div>
+<div class="form-group"><label>Phone</label><input type="tel" id="f_cp" value="${E(ed?.customerPhone||'')}"></div>
+<div class="form-group full"><label>Address</label><input type="text" id="f_ca" value="${E(ed?.customerAddress||'')}"></div>
+<div class="form-section">Dispatch</div>
+<div class="form-group"><label>Driver</label><select id="f_drv" onchange="calcC()"><option value="">Select...</option>${dOpts}</select></div>
+<div class="form-group"><label>Origin</label><select id="f_org" onchange="onOriginChange()"><option value="">Select...</option>${dlOpts}<option value="Other" ${ed&&ed.origin==='Other'?'selected':''}>Other</option></select><div id="f_orgAddr" style="font-size:11px;color:var(--text-muted);margin-top:4px"></div></div>
+<div class="form-group full"><label>Destination Address</label><input type="text" id="f_dst" value="${E(ed?.destination||'')}" placeholder="Enter delivery address..." onblur="autoCalcMiles()"></div>
+<div class="form-group"><label>ETA</label><input type="text" id="f_eta" readonly value="${E(ed?.eta||'')}" placeholder="Auto-calculated" style="color:var(--text-secondary)"></div>
+<div class="form-group"><label>Date</label><input type="date" id="f_dt" value="${ed?.date||new Date().toISOString().split('T')[0]}"></div>
+<div class="form-group"><label>Time (optional)</label><input type="time" id="f_tm" value="${ed?.time||''}"></div>
+<div class="form-group"><label>Miles (one-way) <span id="f_miStatus" style="font-weight:400;text-transform:none;letter-spacing:0"></span></label><input type="number" id="f_mi" min="0" step="1" value="${ed?.miles||''}" oninput="calcC()"></div>
+<div class="form-group"><label class="form-check" style="text-transform:none"><input type="checkbox" id="f_rt" ${ed?.roundTrip?'checked':''} onchange="calcC()"> Round Trip</label></div>
+<div class="form-group"><label>Calculated Cost</label><div class="cost-box" id="f_cc">$0.00</div></div>
+<div class="form-group"><label>Override Cost</label><input type="number" id="f_ov" min="0" step="0.01" value="${ed?.overrideCost||''}" placeholder="Leave blank for calculated" oninput="calcC()"></div>
+<div class="form-group"><label>Status</label><select id="f_st">${ST.map(s=>`<option ${ed&&ed.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+<div class="form-group full"><label>Notes</label><textarea id="f_nt" rows="2" style="resize:vertical">${E(ed?.notes||'')}</textarea></div>
+</div></form>`,
+`<button class="btn btn-s" onclick="closeM()">Cancel</button>${eid?`<button class="btn btn-d btn-sm" onclick="delD('${eid}')">Delete</button>`:''}<button class="btn btn-p" onclick="document.getElementById('dForm').requestSubmit()">${eid?'Update':'Save'}</button>`);
+setTimeout(()=>{calcC();onOriginChange()},50)}
+
+function onOriginChange(){const sel=document.getElementById('f_org');const addr=DL_ADDR[sel?.value]||'';document.getElementById('f_orgAddr').textContent=addr?'📍 '+addr:''}
+
+async function autoCalcMiles(){const org=document.getElementById('f_org')?.value;const dst=document.getElementById('f_dst')?.value?.trim();if(!org||!dst||!DL_ADDR[org])return;
+const originAddr=DL_ADDR[org];const status=document.getElementById('f_miStatus');
+status.innerHTML='<span style="color:var(--accent)">⏳ calculating...</span>';
+const svc=new google.maps.DistanceMatrixService();
+svc.getDistanceMatrix({origins:[originAddr],destinations:[dst],travelMode:'DRIVING',unitSystem:google.maps.UnitSystem.IMPERIAL},function(resp,stat){
+if(stat==='OK'&&resp.rows[0].elements[0].status==='OK'){const el=resp.rows[0].elements[0];const meters=el.distance.value;const miles=Math.round(meters*0.000621371);const duration=el.duration.text;
+document.getElementById('f_mi').value=miles;document.getElementById('f_eta').value=duration;
+status.innerHTML='<span style="color:var(--s-done)">✓ via Google Maps</span>';calcC()}else{status.innerHTML='<span style="color:var(--danger)">— address not found</span>'}})}
+
+function calcC(){const sel=document.getElementById('f_drv'),opt=sel?.selectedOptions[0],rate=parseFloat(opt?.dataset.rate||0),mi=parseFloat(document.getElementById('f_mi')?.value||0),rt=document.getElementById('f_rt')?.checked,ov=document.getElementById('f_ov')?.value,tm=rt?mi*2:mi,cc=rate*tm,fc=ov?parseFloat(ov):cc,el=document.getElementById('f_cc');if(el){if(ov)el.innerHTML=`<span style="text-decoration:line-through;color:var(--text-muted);font-size:14px">$${cc.toFixed(2)}</span> → $${fc.toFixed(2)}`;else{el.textContent='$'+cc.toFixed(2);if(rt&&mi)el.textContent+=` (${tm} mi)`}}}
+
+async function saveD(e,eid){e.preventDefault();const sel=document.getElementById('f_drv'),opt=sel?.selectedOptions[0],rate=parseFloat(opt?.dataset.rate||0),mi=parseFloat(document.getElementById('f_mi')?.value||0),rt=document.getElementById('f_rt')?.checked,ov=document.getElementById('f_ov')?.value,tm=rt?mi*2:mi,cc=rate*tm,fc=ov?parseFloat(ov):cc;
+const d={stockNumber:document.getElementById('f_stk').value.trim(),vin:document.getElementById('f_vin').value.trim(),vehicle:document.getElementById('f_veh').value.trim(),customerName:document.getElementById('f_cn').value.trim(),customerPhone:document.getElementById('f_cp').value.trim(),customerAddress:document.getElementById('f_ca').value.trim(),driverId:sel.value,driverName:opt?.text?.split(' ($')[0]||'',origin:document.getElementById('f_org').value,destination:document.getElementById('f_dst').value.trim(),eta:document.getElementById('f_eta').value.trim(),date:document.getElementById('f_dt').value,time:document.getElementById('f_tm').value,miles:mi,roundTrip:rt,costPerMile:rate,calculatedCost:cc,overrideCost:ov?parseFloat(ov):null,finalCost:fc,status:document.getElementById('f_st').value,notes:document.getElementById('f_nt').value.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+try{if(eid){await db.collection('dispatches').doc(eid).update(d);toast('Updated','success')}else{d.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('dispatches').add(d);toast('Created','success')}closeM()}catch(er){toast(er.message,'error')}}
+async function delD(id){if(!confirm('Delete this dispatch?'))return;await db.collection('dispatches').doc(id).delete();toast('Deleted','error');closeM()}
+
+function openDD(id){const d=(window._dd||[]).find(x=>x.id===id);if(!d)return;const ns=ST[Math.min(ST.indexOf(d.status)+1,3)],ca=d.status!=='Delivered';
+openM('Dispatch Details',`<div class="dg">
+<div class="di"><label>Stock #</label><span class="mono">${E(d.stockNumber)}</span></div><div class="di"><label>Status</label><span class="sb ${sc(d.status)}">${E(d.status)}</span></div>
+<div class="di" style="grid-column:1/-1"><label>Vehicle</label><span>${E(d.vehicle)}</span></div><div class="di"><label>VIN</label><span class="mono">${E(d.vin)||'—'}</span></div>
+<div class="dd"></div>
+<div class="di"><label>Customer</label><span>${E(d.customerName)}</span></div><div class="di"><label>Phone</label><span>${d.customerPhone?`<a href="tel:${E(d.customerPhone)}" style="color:var(--accent)">${E(d.customerPhone)}</a>`:'—'}</span></div>
+<div class="di" style="grid-column:1/-1"><label>Address</label><span>${E(d.customerAddress)||'—'}</span></div>
+<div class="dd"></div>
+<div class="di"><label>Driver</label><span>${E(d.driverName)||'—'}</span></div><div class="di"><label>Origin</label><span>${E(d.origin)||'—'}</span></div>
+<div class="di"><label>Destination</label><span>${E(d.destination)||'—'}</span></div><div class="di"><label>Date</label><span class="mono">${fd(d.date)}${d.time?' @ '+d.time:''}</span></div>
+<div class="di"><label>Miles</label><span class="mono">${d.miles||'—'}${d.roundTrip?' (RT)':''}</span></div><div class="di"><label>Drive Time</label><span class="mono">${E(d.eta)||'—'}</span></div><div class="di"><label>Total Cost</label><span class="mono" style="color:var(--s-done);font-weight:700;font-size:18px">${fm(d.finalCost)}</span></div>
+${d.notes?`<div class="di" style="grid-column:1/-1"><label>Notes</label><span>${E(d.notes)}</span></div>`:''}
+</div>`,
+`<button class="btn btn-d btn-sm" onclick="delD('${id}')">Delete</button><div style="flex:1"></div>${ca?`<button class="btn btn-s btn-sm" onclick="advD('${id}','${ns}')">→ ${ns}</button>`:''}<button class="btn btn-p btn-sm" onclick="closeM();openDF('${id}')">Edit</button>`)}
+
+async function advD(id,ns){await db.collection('dispatches').doc(id).update({status:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('→ '+ns,'info');closeM()}
+
+function exportCSV(){const d=window._dd||[];if(!d.length){toast('No data','info');return}const h='Stock #,VIN,Vehicle,Customer,Phone,Address,Driver,Origin,Destination,Date,Time,Miles,RT,ETA,Cost,Status,Notes',f=['stockNumber','vin','vehicle','customerName','customerPhone','customerAddress','driverName','origin','destination','date','time','miles','roundTrip','eta','finalCost','status','notes'];const csv=[h,...d.map(x=>f.map(k=>`"${String(x[k]||'').replace(/"/g,'""')}"`).join(','))].join('\n');const b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`aag-dispatch-${new Date().toISOString().split('T')[0]}.csv`;a.click();toast('Exported','success')}
+
+// ═══ TRANSPORT CALENDAR ═══
+function pgTCal(c){window._tcd=new Date();window._tcv='month';c.innerHTML=`<div class="page-hdr"><h1>Transport Calendar</h1><button class="btn btn-p btn-sm" onclick="openDF()">+ New Dispatch</button></div>
+<div class="page-body"><div class="cal-hdr"><div style="display:flex;align-items:center;gap:12px"><div class="cal-nav"><button class="btn-icon" onclick="tcN(-1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button><button class="btn-icon" onclick="tcN(1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button></div><h3 id="tcT"></h3></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-s btn-xs" onclick="window._tcd=new Date();rTC()">Today</button><div class="cal-toggle"><button class="active" onclick="setTV('month',this)">Month</button><button onclick="setTV('week',this)">Week</button></div></div></div><div id="tcB"></div></div>`;
+const un=db.collection('dispatches').onSnapshot(s=>{window._tdd=s.docs.map(d=>({id:d.id,...d.data()}));rTC()});unsubs.push(un)}
+function tcN(dir){const d=window._tcd;if(window._tcv==='month')d.setMonth(d.getMonth()+dir);else d.setDate(d.getDate()+(dir*7));rTC()}
+function setTV(v,b){window._tcv=v;b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');rTC()}
+
+function rTC(){const d=window._tcd,dis=window._tdd||[];if(window._tcv==='month'){document.getElementById('tcT').textContent=d.toLocaleDateString('en-US',{month:'long',year:'numeric'});rTCM(d,dis)}else{const s=new Date(d);s.setDate(s.getDate()-s.getDay());const e=new Date(s);e.setDate(e.getDate()+6);document.getElementById('tcT').textContent=s.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+e.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});rTCW(s,dis)}}
+
+function rTCM(date,dis){const y=date.getFullYear(),mo=date.getMonth(),fd2=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),td=new Date().toISOString().split('T')[0];const bd={};dis.forEach(d=>{if(d.date)(bd[d.date]=bd[d.date]||[]).push(d)});let h='<div class="cal-grid">';['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cal-dh">${d}</div>`);const pm=new Date(y,mo,0).getDate();for(let i=fd2-1;i>=0;i--)h+=`<div class="cal-d om"><div class="cal-dn">${pm-i}</div></div>`;for(let day=1;day<=dim;day++){const ds=`${y}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,it=ds===td,ev=bd[ds]||[];h+=`<div class="cal-d ${it?'today':''}"><div class="cal-dn">${day}</div>`;ev.slice(0,3).forEach(e=>{const cl=sc(e.status),col=cl==='pending'?'var(--s-pend)':cl==='dispatched'?'var(--s-disp)':cl==='in-transit'?'var(--s-tran)':'var(--s-done)';h+=`<div class="cal-ev" style="background:${col}20;color:${col}" onclick="event.stopPropagation();openDD('${e.id}')">${E(e.driverName||'?')}: ${E((e.vehicle||'').split(' ').slice(0,2).join(' '))}</div>`});if(ev.length>3)h+=`<div style="font-size:10px;color:var(--text-muted);padding:2px 6px">+${ev.length-3} more</div>`;h+='</div>'}const tc=fd2+dim,rem=(7-tc%7)%7;for(let i=1;i<=rem;i++)h+=`<div class="cal-d om"><div class="cal-dn">${i}</div></div>`;h+='</div>';document.getElementById('tcB').innerHTML=h}
+
+function rTCW(start,dis){const td=new Date().toISOString().split('T')[0];const bd={};dis.forEach(d=>{if(d.date)(bd[d.date]=bd[d.date]||[]).push(d)});let h='<div class="wk-agenda">';for(let i=0;i<7;i++){const d=new Date(start);d.setDate(d.getDate()+i);const ds=d.toISOString().split('T')[0],it=ds===td,ev=bd[ds]||[];h+=`<div class="wk-day"><div class="wk-dh ${it?'today':''}">${d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}${ev.length?`<span class="mono" style="font-size:12px;color:var(--text-muted)">${ev.length} trip${ev.length>1?'s':''}</span>`:''}</div>`;if(ev.length){h+='<div class="wk-db">';ev.forEach(e=>{h+=`<div class="wk-ev" onclick="openDD('${e.id}')"><div class="wk-et">${e.time||'—'}</div><div class="wk-ec"><div class="wk-en">${E(e.driverName||'?')} — ${E(e.vehicle)}</div><div class="wk-es">${E(e.origin||'')} → ${E(e.destination||'')} · ${fm(e.finalCost)}</div></div><span class="sb ${sc(e.status)}" style="flex-shrink:0">${E(e.status)}</span></div>`});h+='</div>'}else h+='<div class="wk-db" style="padding:16px;color:var(--text-muted);font-size:13px">No trips</div>';h+='</div>'}h+='</div>';document.getElementById('tcB').innerHTML=h}
+
+// ═══ PORTER BOARD ═══
+function pgPorter(c){window._pcd=new Date();const ia=CUD.role==='admin';c.innerHTML=`<div class="page-hdr"><h1>Porter Board</h1>${ia?'<button class="btn btn-p btn-sm" onclick="openPR()">+ Add Run</button>':''}</div>
+<div class="page-body"><div class="cal-hdr"><div style="display:flex;align-items:center;gap:12px"><div class="cal-nav"><button class="btn-icon" onclick="pcN(-1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button><button class="btn-icon" onclick="pcN(1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button></div><h3 id="pcT"></h3></div><button class="btn btn-s btn-xs" onclick="window._pcd=new Date();rPC()">Today</button></div><div id="pcB"></div></div>`;
+const un=db.collection('porterRuns').onSnapshot(s=>{window._pr=s.docs.map(d=>({id:d.id,...d.data()}));rPC()});unsubs.push(un)}
+function pcN(dir){window._pcd.setMonth(window._pcd.getMonth()+dir);rPC()}
+
+function rPC(){const d=window._pcd,y=d.getFullYear(),mo=d.getMonth();document.getElementById('pcT').textContent=d.toLocaleDateString('en-US',{month:'long',year:'numeric'});const fd2=new Date(y,mo,1).getDay(),dim=new Date(y,mo+1,0).getDate(),td=new Date().toISOString().split('T')[0],runs=window._pr||[],ia=CUD.role==='admin';const bd={};runs.forEach(r=>{if(r.date)(bd[r.date]=bd[r.date]||[]).push(r)});
+let h='<div class="cal-grid">';['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>h+=`<div class="cal-dh">${d}</div>`);const pm=new Date(y,mo,0).getDate();for(let i=fd2-1;i>=0;i--)h+=`<div class="cal-d om"><div class="cal-dn">${pm-i}</div></div>`;
+for(let day=1;day<=dim;day++){const ds=`${y}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,it=ds===td,dr=bd[ds]||[];
+// Count total porters out (each porter in a multi-porter run counts separately)
+let pCount=0;dr.forEach(r=>{pCount+=(r.porterNames||[r.porterName]).length});
+h+=`<div class="cal-d ${it?'today':''}" onclick="openDayView('${ds}')" style="cursor:pointer"><div class="cal-dn">${day}${pCount?`<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px">${pCount}</span>`:''}</div>`;
+dr.forEach((r,idx)=>{const names=(r.porterNames||[r.porterName]).join(', ');h+=`<div class="cal-ev pc-${idx%8}" style="color:#fff" onclick="event.stopPropagation();openPRD('${r.id}')">${E(names)} ${r.startTime||''} (${r.durationHours||'?'}h)</div>`});h+='</div>'}
+const tc=fd2+dim,rem=(7-tc%7)%7;for(let i=1;i<=rem;i++)h+=`<div class="cal-d om"><div class="cal-dn">${i}</div></div>`;h+='</div>';document.getElementById('pcB').innerHTML=h}
+
+function openPRD(id){const r=(window._pr||[]).find(x=>x.id===id);if(!r)return;const ia=CUD.role==='admin';const names=(r.porterNames||[r.porterName]).join(', ');openM('Porter Run',`<div class="dg"><div class="di"><label>Porter(s)</label><span>${E(names)}</span></div><div class="di"><label>Date</label><span class="mono">${fd(r.date)}</span></div><div class="di"><label>Start</label><span class="mono">${r.startTime||'—'}</span></div><div class="di"><label>Duration</label><span>${r.durationHours||'?'} hours</span></div>${r.notes?`<div class="di" style="grid-column:1/-1"><label>Notes</label><span>${E(r.notes)}</span></div>`:''}</div>`,ia?`<button class="btn btn-d btn-sm" onclick="delPR('${id}')">Delete</button><div style="flex:1"></div><button class="btn btn-p btn-sm" onclick="closeM();openPR('${id}')">Edit</button>`:'','480px')}
+
+async function openPR(eid,pfDate){const ps=await db.collection('porters').orderBy('name').get(),porters=ps.docs.map(d=>({id:d.id,...d.data()}));let ed=null;if(eid){const doc=await db.collection('porterRuns').doc(eid).get();ed=doc.data()}
+const selIds=ed?(ed.porterIds||[ed.porterId]):[];
+const pChecks=porters.map(p=>`<label class="form-check" style="padding:6px 0"><input type="checkbox" class="pr_pc" value="${p.id}" data-name="${E(p.name)}" ${selIds.includes(p.id)?'checked':''}> ${E(p.name)}</label>`).join('');
+openM(eid?'Edit Run':'Add Run',`<form id="prForm" onsubmit="savePR(event,'${eid||''}')"><div class="form-grid"><div class="form-group full"><label>Porter(s)</label><div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:8px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r)">${pChecks}</div></div><div class="form-group"><label>Date</label><input type="date" id="pr_d" required value="${ed?.date||pfDate||new Date().toISOString().split('T')[0]}"></div><div class="form-group"><label>Start Time</label><input type="time" id="pr_t" value="${ed?.startTime||'08:00'}"></div><div class="form-group"><label>Duration (hrs)</label><input type="number" id="pr_h" min="0.5" max="24" step="0.5" value="${ed?.durationHours||2}"></div><div class="form-group full"><label>Notes</label><textarea id="pr_n" rows="3" style="resize:vertical" placeholder="What are they doing?">${E(ed?.notes||'')}</textarea></div></div></form>`,
+`<button class="btn btn-s" onclick="closeM()">Cancel</button>${eid?`<button class="btn btn-d btn-sm" onclick="delPR('${eid}')">Delete</button>`:''}<button class="btn btn-p" onclick="document.getElementById('prForm').requestSubmit()">${eid?'Update':'Add'}</button>`,'500px')}
+
+async function savePR(e,eid){e.preventDefault();const checks=document.querySelectorAll('.pr_pc:checked');if(!checks.length){toast('Select at least one porter','error');return}const porterIds=[],porterNames=[];checks.forEach(c=>{porterIds.push(c.value);porterNames.push(c.dataset.name)});const d={porterIds,porterNames,porterName:porterNames.join(', '),date:document.getElementById('pr_d').value,startTime:document.getElementById('pr_t').value,durationHours:parseFloat(document.getElementById('pr_h').value),notes:document.getElementById('pr_n').value.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};try{if(eid){await db.collection('porterRuns').doc(eid).update(d);toast('Updated','success')}else{d.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('porterRuns').add(d);toast('Added','success')}closeM()}catch(er){toast(er.message,'error')}}
+
+function openDayView(ds){const runs=(window._pr||[]).filter(r=>r.date===ds);const ia=CUD.role==='admin';const dayLabel=new Date(ds+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+// Expand runs into individual porter entries
+const entries=[];runs.forEach(r=>{const names=r.porterNames||[r.porterName];const ids=r.porterIds||[r.porterId];names.forEach((name,i)=>{entries.push({name,porterId:ids[i]||'',startTime:r.startTime||'08:00',durationHours:r.durationHours||2,notes:r.notes,runId:r.id})})});
+// Build vertical timeline from 5am to 8pm
+const startH=5,endH=20;let bodyH='';
+if(entries.length){
+// Sort by start time
+entries.sort((a,b)=>a.startTime.localeCompare(b.startTime));
+bodyH+=`<div style="position:relative;margin-top:8px">`;
+// Hour rows
+for(let h=startH;h<=endH;h++){const lbl=h>12?(h-12)+' PM':h===12?'12 PM':h+' AM';const isWork=h>=7&&h<=17;
+bodyH+=`<div style="display:flex;align-items:flex-start;height:48px;border-top:1px solid ${isWork?'var(--border)':'var(--bg-input)'}">
+<div style="width:60px;flex-shrink:0;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-muted);padding-top:2px;text-align:right;padding-right:12px">${lbl}</div>
+<div style="flex:1;position:relative;height:100%"></div></div>`}
+// Overlay porter bars - arrange side by side when overlapping
+const totalH=(endH-startH+1)*48;
+// Calculate overlap groups
+entries.forEach(ent=>{const[sh,sm]=ent.startTime.split(':').map(Number);ent._startMin=(sh-startH)*60+sm;ent._endMin=ent._startMin+ent.durationHours*60});
+// Assign columns: greedy left-to-right
+entries.forEach(ent=>{ent._col=0;ent._totalCols=1});
+for(let i=0;i<entries.length;i++){let col=0;for(let j=0;j<i;j++){if(entries[j]._endMin>entries[i]._startMin&&entries[j]._startMin<entries[i]._endMin){if(entries[j]._col>=col)col=entries[j]._col+1}}entries[i]._col=col}
+// Calculate max concurrent columns for each entry's time range
+for(let i=0;i<entries.length;i++){let maxCol=entries[i]._col;for(let j=0;j<entries.length;j++){if(j!==i&&entries[j]._endMin>entries[i]._startMin&&entries[j]._startMin<entries[i]._endMin){if(entries[j]._col>maxCol)maxCol=entries[j]._col}}entries[i]._totalCols=maxCol+1}
+
+bodyH+=`<div style="position:absolute;top:0;left:60px;right:0;height:${totalH}px;pointer-events:none">`;
+entries.forEach((ent,idx)=>{const topPx=ent._startMin/60*48;const heightPx=ent.durationHours*48;const ci=idx%8;const endTime=new Date(2000,0,1,0,0);endTime.setMinutes(ent._startMin+startH*60+ent.durationHours*60);const endStr=endTime.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});const stTime=new Date(2000,0,1,0,0);stTime.setMinutes(ent._startMin+startH*60);const startStr=stTime.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+const colW=100/ent._totalCols;const leftPct=ent._col*colW;
+bodyH+=`<div class="pc-${ci}" style="pointer-events:auto;position:absolute;top:${topPx}px;left:${leftPct}%;width:${colW}%;height:${Math.max(heightPx,28)}px;border-radius:6px;display:flex;flex-direction:column;justify-content:center;padding:8px 10px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;opacity:0.92;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid var(--bg-card);overflow:hidden" onclick="openPRD('${ent.runId}')">
+<span style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${E(ent.name)}</span>
+<span style="font-size:10px;opacity:0.8;margin-top:2px">${startStr} – ${endStr}</span></div>`});
+bodyH+='</div></div>'}else{bodyH=`<div class="empty" style="padding:24px"><h3>No runs scheduled</h3><p>Click "Add Run" to schedule porters for this day.</p></div>`}
+// Summary line
+if(entries.length){bodyH=`<div style="font-size:13px;color:var(--text-secondary);margin-bottom:4px">${entries.length} porter${entries.length>1?'s':''} off the lot</div>`+bodyH}
+openM(dayLabel,bodyH,
+ia?`<button class="btn btn-s" onclick="closeM()">Close</button><button class="btn btn-p btn-sm" onclick="closeM();openPR(null,'${ds}')">+ Add Run</button>`:`<button class="btn btn-s" onclick="closeM()">Close</button>`,'560px')}
+async function delPR(id){if(!confirm('Delete this run?'))return;await db.collection('porterRuns').doc(id).delete();toast('Deleted','error');closeM()}
+
+// ═══ MY TRIPS (Driver) ═══
+function pgMyTrips(c){c.innerHTML=`<div class="page-hdr"><h1>My Trips</h1></div><div class="page-body"><div class="toolbar"><div class="fg" id="mtF"></div></div><div id="mtB"></div><div class="empty" id="mtE" style="display:none"><h3>No trips assigned</h3><p>Check back for new assignments.</p></div></div>`;
+let fh='<button class="fb active" onclick="setMTF(\'all\',this)">All</button>';ST.forEach(s=>fh+=`<button class="fb" onclick="setMTF('${s}',this)">${s}</button>`);document.getElementById('mtF').innerHTML=fh;window._mtf='all';
+// Listen for dispatches, filter to this driver
+const un=db.collection('dispatches').onSnapshot(async s=>{const dSnap=await db.collection('drivers').where('userId','==',CU.uid).get();const myIds=dSnap.docs.map(d=>d.id);window._mt=s.docs.map(d=>({id:d.id,...d.data()})).filter(d=>myIds.includes(d.driverId));rMT()});unsubs.push(un)}
+function setMTF(f,b){window._mtf=f;b.parentElement.querySelectorAll('.fb').forEach(x=>x.classList.remove('active'));b.classList.add('active');rMT()}
+function rMT(){const f=window._mtf;let t=(window._mt||[]).filter(x=>f==='all'||x.status===f);t.sort((a,b)=>(b.date||'').localeCompare(a.date||''));const bd=document.getElementById('mtB'),em=document.getElementById('mtE');if(!t.length){bd.innerHTML='';em.style.display='block';return}em.style.display='none';
+bd.innerHTML=t.map(t=>`<div class="trip-card"><div class="tc-hdr"><div><div class="tc-v">${E(t.vehicle)}</div><div class="tc-s">${E(t.stockNumber)}</div></div><span class="sb ${sc(t.status)}">${E(t.status)}</span></div>
+<div class="tc-route"><div class="rp">${E(t.origin||'—')}</div><div class="ra">→</div><div class="rp">${E(t.destination||'—')}</div>${t.roundTrip?'<span style="font-size:11px;color:var(--text-muted);margin-left:8px">(Round Trip)</span>':''}</div>
+<div class="tc-grid"><div class="tc-f"><label>Customer</label><span>${E(t.customerName)}</span></div><div class="tc-f"><label>Phone</label><span>${t.customerPhone?`<a href="tel:${E(t.customerPhone)}" style="color:var(--accent)">${E(t.customerPhone)}</a>`:'—'}</span></div><div class="tc-f"><label>Date</label><span class="mono">${fd(t.date)}${t.time?' @ '+t.time:''}</span></div><div class="tc-f"><label>Miles</label><span class="mono">${t.miles||'—'}${t.roundTrip?' (×2 RT)':''}</span></div><div class="tc-f"><label>Drive Time</label><span class="mono">${E(t.eta)||'—'}</span></div>${t.customerAddress?`<div class="tc-f" style="grid-column:1/-1"><label>Address</label><span>${E(t.customerAddress)}</span></div>`:''}${t.notes?`<div class="tc-f" style="grid-column:1/-1"><label>Notes</label><span>${E(t.notes)}</span></div>`:''}</div>
+<div class="tc-cost">${fm(t.finalCost)}</div>
+${t.status==='Pending'||t.status==='Dispatched'?`<button class="btn btn-s" style="width:100%;justify-content:center" onclick="drvAdv('${t.id}','In Transit')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Mark In Transit</button>`:''}
+${t.status==='In Transit'?`<button class="btn btn-p" style="width:100%;justify-content:center" onclick="drvAdv('${t.id}','Delivered')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Mark as Delivered</button>`:''}</div>`).join('')}
+async function drvAdv(id,ns){if(!confirm('Mark as '+ns+'?'))return;await db.collection('dispatches').doc(id).update({status:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('→ '+ns,'success')}
+
+// ═══ MANAGE USERS ═══
+function pgUsers(c){c.innerHTML=`<div class="page-hdr"><h1>User Management</h1></div><div class="page-body"><div class="card"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody id="uTB"></tbody></table></div></div>`;
+const un=db.collection('users').onSnapshot(s=>{const u=s.docs.map(d=>({id:d.id,...d.data()}));document.getElementById('uTB').innerHTML=u.map(x=>`<tr><td>${E(x.displayName)}</td><td style="color:var(--text-secondary)">${E(x.email)}</td><td><span class="rb ${x.role}">${x.role}</span></td><td>${x.approved?'<span style="color:var(--s-done)">Approved</span>':'<span style="color:var(--warning)">Pending</span>'}</td><td>${x.id!==CU.uid?`<select style="padding:5px 8px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r);color:var(--text-primary);font-size:12px;font-family:'DM Sans',sans-serif" onchange="updUR('${x.id}',this.value)"><option value="pending" ${x.role==='pending'?'selected':''}>Pending</option><option value="admin" ${x.role==='admin'?'selected':''}>Admin</option><option value="driver" ${x.role==='driver'?'selected':''}>Driver</option><option value="viewer" ${x.role==='viewer'?'selected':''}>Viewer</option></select>`:'<span style="color:var(--text-muted);font-size:12px">You</span>'}</td></tr>`).join('')});unsubs.push(un)}
+async function updUR(uid,role){await db.collection('users').doc(uid).update({role,approved:role!=='pending'});toast('Role → '+role,'success')}
+
+// ═══ MANAGE DRIVERS ═══
+function pgDrivers(c){c.innerHTML=`<div class="page-hdr"><h1>Transport Drivers</h1><button class="btn btn-p btn-sm" onclick="openDrv()">+ Add Driver</button></div><div class="page-body"><div class="card"><table><thead><tr><th>Name</th><th>Cost/Mile</th><th>Linked User</th><th>Actions</th></tr></thead><tbody id="dvTB"></tbody></table></div></div>`;
+const un=db.collection('drivers').orderBy('name').onSnapshot(s=>{const d=s.docs.map(x=>({id:x.id,...x.data()}));document.getElementById('dvTB').innerHTML=d.length?d.map(x=>`<tr><td style="font-weight:600">${E(x.name)}</td><td class="mono">$${(x.costPerMile||0).toFixed(2)}</td><td style="color:var(--text-secondary);font-size:13px">${E(x.linkedEmail||'Not linked')}</td><td><button class="btn btn-s btn-xs" onclick="openDrv('${x.id}')">Edit</button> <button class="btn btn-d btn-xs" onclick="delDrv('${x.id}')">Remove</button></td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">No drivers yet</td></tr>'});unsubs.push(un)}
+
+async function openDrv(eid){let ed=null;if(eid){const doc=await db.collection('drivers').doc(eid).get();ed=doc.data()}const us=await db.collection('users').where('role','==','driver').get(),du=us.docs.map(d=>({id:d.id,...d.data()}));const uOpts=du.map(u=>`<option value="${u.id}" data-email="${E(u.email)}" ${ed&&ed.userId===u.id?'selected':''}>${E(u.displayName)} (${E(u.email)})</option>`).join('');
+openM(eid?'Edit Driver':'Add Driver',`<form id="dvForm" onsubmit="saveDrv(event,'${eid||''}')"><div class="form-grid"><div class="form-group"><label>Name</label><input type="text" id="dv_n" required value="${E(ed?.name||'')}"></div><div class="form-group"><label>Cost/Mile ($)</label><input type="number" id="dv_r" min="0" step="0.01" required value="${ed?.costPerMile||''}"></div><div class="form-group full"><label>Link to User (optional)</label><select id="dv_u"><option value="">None</option>${uOpts}</select><p style="font-size:11px;color:var(--text-muted);margin-top:4px">Link to a user with "Driver" role to let them see trips.</p></div></div></form>`,
+`<button class="btn btn-s" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="document.getElementById('dvForm').requestSubmit()">${eid?'Update':'Add'}</button>`,'480px')}
+
+async function saveDrv(e,eid){e.preventDefault();const us=document.getElementById('dv_u'),d={name:document.getElementById('dv_n').value.trim(),costPerMile:parseFloat(document.getElementById('dv_r').value),userId:us.value||null,linkedEmail:us.selectedOptions[0]?.dataset.email||null,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};try{if(eid){await db.collection('drivers').doc(eid).update(d);toast('Updated','success')}else{d.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('drivers').add(d);toast('Added','success')}closeM()}catch(er){toast(er.message,'error')}}
+async function delDrv(id){if(!confirm('Remove driver?'))return;await db.collection('drivers').doc(id).delete();toast('Removed','error')}
+
+// ═══ MANAGE PORTERS ═══
+function pgPorters(c){c.innerHTML=`<div class="page-hdr"><h1>Lot Porters</h1><button class="btn btn-p btn-sm" onclick="openPrt()">+ Add Porter</button></div><div class="page-body"><div class="card"><table><thead><tr><th>Name</th><th>Actions</th></tr></thead><tbody id="ptTB"></tbody></table></div></div>`;
+const un=db.collection('porters').orderBy('name').onSnapshot(s=>{const p=s.docs.map(x=>({id:x.id,...x.data()}));document.getElementById('ptTB').innerHTML=p.length?p.map(x=>`<tr><td style="font-weight:600">${E(x.name)}</td><td><button class="btn btn-s btn-xs" onclick="openPrt('${x.id}')">Edit</button> <button class="btn btn-d btn-xs" onclick="delPrt('${x.id}')">Remove</button></td></tr>`).join(''):'<tr><td colspan="2" style="text-align:center;color:var(--text-muted);padding:24px">No porters yet</td></tr>'});unsubs.push(un)}
+
+async function openPrt(eid){let ed=null;if(eid){const doc=await db.collection('porters').doc(eid).get();ed=doc.data()}
+openM(eid?'Edit Porter':'Add Porter',`<form id="ptForm" onsubmit="savePrt(event,'${eid||''}')"><div class="form-grid" style="grid-template-columns:1fr"><div class="form-group"><label>Name</label><input type="text" id="pt_n" required value="${E(ed?.name||'')}"></div></div></form>`,
+`<button class="btn btn-s" onclick="closeM()">Cancel</button><button class="btn btn-p" onclick="document.getElementById('ptForm').requestSubmit()">${eid?'Update':'Add'}</button>`,'400px')}
+
+async function savePrt(e,eid){e.preventDefault();const d={name:document.getElementById('pt_n').value.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};try{if(eid){await db.collection('porters').doc(eid).update(d);toast('Updated','success')}else{d.createdAt=firebase.firestore.FieldValue.serverTimestamp();await db.collection('porters').add(d);toast('Added','success')}closeM()}catch(er){toast(er.message,'error')}}
+async function delPrt(id){if(!confirm('Remove porter?'))return;await db.collection('porters').doc(id).delete();toast('Removed','error')}
+
+showS('authScreen');
+</script>
+</body>
+</html>
